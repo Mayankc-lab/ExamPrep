@@ -1,0 +1,25 @@
+const http = require('http');
+const fs = require('fs');
+const path = require('path');
+const root = process.cwd();
+const port = 5173;
+const mime = { '.html': 'text/html; charset=utf-8', '.js': 'application/javascript; charset=utf-8', '.css': 'text/css; charset=utf-8', '.json': 'application/json; charset=utf-8', '.png': 'image/png', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.svg': 'image/svg+xml', '.ico': 'image/x-icon' };
+const server = http.createServer((req, res) => {
+  const urlPath = req.url.split('?')[0];
+  const safePath = decodeURIComponent(urlPath === '/' ? '/index.html' : urlPath);
+  const filePath = path.join(root, safePath);
+  fs.stat(filePath, (err, stats) => {
+    if (!err && stats.isFile()) {
+      const ext = path.extname(filePath);
+      res.writeHead(200, { 'Content-Type': mime[ext] || 'application/octet-stream' });
+      fs.createReadStream(filePath).pipe(res);
+    } else {
+      fs.readFile(path.join(root, 'index.html'), (e, data) => {
+        if (e) { res.writeHead(500); res.end('Server Error'); return; }
+        res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
+        res.end(data);
+      });
+    }
+  });
+});
+server.listen(port, '0.0.0.0', () => console.log('SPA server on http://127.0.0.1:' + port));

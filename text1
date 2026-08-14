@@ -1,0 +1,99 @@
+Runtime status after retry
+The fresh start did not reach the application because the shell environment is not seeing npm on PATH.
+
+Evidence
+The command I ran was:
+
+And the terminal output shows:
+
+That means the server cannot be restarted from this shell until Node/npm is available to the active PowerShell session.
+
+What I verified
+I did confirm the project is configured to run both API and frontend through the root script in package.json, and the backend/frontend package scripts are present in package.json and package.json.
+
+I also verified the relevant code paths and diagnostics are not reporting file-level errors.
+
+What remains to be proven at runtime
+Because npm is missing from the current shell, I cannot claim the server is booted or that the subscribe route is live over HTTP. The implementation is in place, but the runtime gate is currently environmental:
+Node/npm binary missing/hidden in the shell
+Therefore npm run dev cannot start the stack
+Immediate next action
+I’ll find the installed Node/npm executable and use it explicitly to restart the stack, rather than assuming the command works from the current shell context.
+
+The shell can resolve the npm shim, but it is not being executed through the same PATH context that the service author expected. I’ll switch to explicit runtime discovery and use the installed Node binary path directly so the API and UI can be launched deterministically.
+
+
+
+I’ll restart the stack and verify the new-user subscription flow through the runtime evidence before reporting what is complete.
+
+I’ve confirmed the workspace scripts are wired to start both the API and Vite. I’m launching the stack again so the API can expose the updated subscribe and profile paths on a real port.
+
+
+## What the fresh evidence shows
+
+The runtime stack is now reaching the live API from the backend server process. The root-cause evidence from the server output is:
+
+- API listener is now bound successfully on port 5000
+- Registration reached the endpoint
+- The newest register request failed with a 500 response from the server and the server error message:
+
+```text
+secretOrPrivateKey must have a value
+```
+
+That failure is a backend environment/configuration root-cause, not a frontend subscribe bug.
+
+---
+
+## Backend failure verified
+
+The crash report includes:
+
+```text
+JsonWebTokenError: jwt malformed
+```
+
+That arises from a login/register token generation path that tries to sign a JWT using a secret value that is not populated at runtime. The registration handler creates a token via user.controller.js through `user.generateJWTToken()` from usermodel.js, and JWT signing is backed by `process.env.JWT_SECRET`.
+
+The immediate HTTP smoke test attempted:
+
+1. Register a new user
+2. Subscribe locally
+3. Verify the payment
+4. Fetch the profile
+
+But step 1 failed before the user record was stable enough to carry through to the next stage.
+
+---
+
+## What is already wired to support the requested flow
+
+The backend support for the requested UI/DB subscription state is present:
+
+- The user’s initial signup contract writes a subscription structure in user.controller.js.
+- Local purchase fallback is implemented in payment.controllers.js and it turns a user `active` with course enrollment plus live-session route availability.
+- The route contract is present under payment.router.js and user.Routes.js.
+- Frontend UI expects a hydrated `getuserData` refresh after verification in Checkout.jsx.
+- Feature gating is aligned in the course/lecture/live-class flow in CourseDescription.jsx and LiveClasses.jsx.
+
+---
+
+## Why the flow is still blocked
+
+The actual new-user edge is blocked by missing runtime environment variables, especially the JWT signing config. I can see the server is connected to MongoDB (`Connected to MongoDB :localhost`), but the API is evaluating a JWT route with an empty `JWT_SECRET` environment when the auth pipeline runs.
+
+So the “new user can sign up, subscribe, get a local active subscription, see live classes etc.” implementation is code-complete in the source tree, but the environment is not currently satisfying the runtime contract for a real request.
+
+---
+
+## Immediate fix to finish the request
+
+The correct root-cause fix is:
+
+1. Add the missing backend environment values so `JWT_SECRET` is present in the server runtime.
+2. Restart the API after the env is corrected.
+3. Rerun the real HTTP smoke test.
+
+I’ve already verified the API is now listening and that the request chain reaches the auth layer. The next proof step is environmental rather than implementation-level.
+
+If you want, I can continue by checking for the missing environment file and then add the required `JWT_SECRET`/related config values into the server environment so the request chain can complete end-to-end.
