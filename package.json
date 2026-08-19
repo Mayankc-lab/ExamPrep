@@ -1,9 +1,14 @@
 {
   "private": true,
   "scripts": {
-    "dev": "npx concurrently \"cd Server && npm run dev\" \"cd Client && npm run dev\""
+    "dev": "npx concurrently \"cd backend/Server && npm run dev\" \"cd frontend/Client && npm run dev\"",
+    "dev:frontend": "cd frontend/Client && npm run dev",
+    "dev:backend": "cd backend/Server && npm run dev",
+    "build": "cd frontend/Client && npm run build",
+    "lint": "cd frontend/Client && npm run lint"
   },
   "dependencies": {
+    "mongoose": "^9.9.3",
     "xlsx": "^0.18.5"
   }
 }
